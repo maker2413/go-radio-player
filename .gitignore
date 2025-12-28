@@ -1,1 +1,5 @@
+# Env vars
+.env
+
+# Binaries
 cmd/radio/rpgamer-radio

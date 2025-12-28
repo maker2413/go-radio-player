@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/gopxl/beep"
 	"github.com/gopxl/beep/mp3"
 	"github.com/gopxl/beep/speaker"
+	"github.com/joho/godotenv"
 )
 
 // IcyReader wraps a stream and extracts metadata at intervals
@@ -72,8 +74,16 @@ type bufferedReadCloser struct {
 }
 
 func main() {
+	err := godotenv.Load("../../.env")
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
 	// 1. The direct stream URL (Icecast mount point)
-	streamURL := ""
+	streamURL := os.Getenv("STREAM_URL")
+	if streamURL == "" {
+		log.Fatal("STREAM_URL not set")
+	}
 
 	// 2. Fetch the stream via HTTP
 	log.Println("Connecting to stream...")
