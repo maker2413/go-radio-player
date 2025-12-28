@@ -1,77 +1,18 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
-	"io"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
+	"github.com/charmbracelet/log"
 	"github.com/gopxl/beep"
 	"github.com/gopxl/beep/mp3"
 	"github.com/gopxl/beep/speaker"
 	"github.com/joho/godotenv"
+	"github.com/maker2413/go-radio/internal/icyreader"
 )
-
-// IcyReader wraps a stream and extracts metadata at intervals
-type IcyReader struct {
-	body        io.ReadCloser
-	interval    int
-	bytesToNext int
-}
-
-func (r *IcyReader) Read(p []byte) (n int, err error) {
-	if r.bytesToNext == 0 {
-		// Time to read metadata!
-		var lengthByte [1]byte
-		if _, err := io.ReadFull(r.body, lengthByte[:]); err != nil {
-			return 0, err
-		}
-
-		metaLen := int(lengthByte[0]) * 16
-		if metaLen > 0 {
-			metaData := make([]byte, metaLen)
-			if _, err := io.ReadFull(r.body, metaData); err != nil {
-				return 0, err
-			}
-			parseMetadata(string(metaData))
-		}
-		r.bytesToNext = r.interval
-	}
-
-	// Limit read to not cross into the next metadata block
-	limit := len(p)
-	if limit > r.bytesToNext {
-		limit = r.bytesToNext
-	}
-
-	n, err = r.body.Read(p[:limit])
-	r.bytesToNext -= n
-	return n, err
-}
-
-func (r *IcyReader) Close() error {
-	return r.body.Close()
-}
-
-func parseMetadata(meta string) {
-	// Format is usually: StreamTitle='Song Name - Artist';
-	if strings.Contains(meta, "StreamTitle='") {
-		parts := strings.Split(meta, "StreamTitle='")
-		title := strings.Split(parts[1], "';")[0]
-		fmt.Printf("\n--- NOW PLAYING: %s ---\n", title)
-	}
-}
-
-// bufferedReadCloser bridges bufio.Reader and io.Closer
-type bufferedReadCloser struct {
-	*bufio.Reader
-	io.Closer
-}
 
 func main() {
 	err := godotenv.Load("../../.env")
@@ -85,48 +26,60 @@ func main() {
 		log.Fatal("STREAM_URL not set")
 	}
 
+	debug := os.Getenv("DEBUG")
+	if debug == "" {
+		log.Fatal("DEBUG not set")
+	}
+
+	logCaller := false
+	logLevel := 0
+	if debug == "true" {
+		logCaller = true
+		logLevel = -4
+	}
+
+	logger := log.NewWithOptions(os.Stderr, log.Options{
+		ReportCaller:    logCaller,
+		ReportTimestamp: true,
+		TimeFormat:      time.RFC3339,
+		Level:           log.Level(logLevel),
+	})
+
 	// 2. Fetch the stream via HTTP
-	log.Println("Connecting to stream...")
+	logger.Info("Connecting to stream...")
 	client := &http.Client{Timeout: 0}
 	req, _ := http.NewRequest("GET", streamURL, nil)
 	req.Header.Set("Icy-MetaData", "1")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatalf("Failed to connect: %v", err)
+		logger.Fatalf("Failed to connect: %v", err)
 	}
 	defer resp.Body.Close()
 
 	// Check if the server actually supports ICY metadata
 	icyIntStr := resp.Header.Get("icy-metaint")
 	if icyIntStr == "" {
-		log.Fatal("Server did not return icy-metaint. This might not be a direct Icecast stream.")
+		logger.Fatal("Server did not return icy-metaint. This might not be a direct Icecast stream.")
 	}
 
 	// Get the interval from headers
 	metaint, _ := strconv.Atoi(resp.Header.Get("icy-metaint"))
-	log.Printf("Metadata interval: %d bytes", metaint)
+	logger.Debug("Metadata interval: %d bytes", metaint)
 
-	icyReader := &IcyReader{
-		body:        resp.Body,
-		interval:    metaint,
-		bytesToNext: metaint,
-	}
+	reader := icyreader.NewIcyReader(resp.Body, metaint)
 
-	wrappedReader := &bufferedReadCloser{
-		Reader: bufio.NewReaderSize(icyReader, 32*1024), // 32KB buffer
-		Closer: icyReader,
-	}
+	wrappedReader := icyreader.NewWrappedReader(reader, 32*1024) // 32KB buffer
 
-	log.Println("Decoding MP3 stream...")
+	logger.Debug("Decoding MP3 stream...")
 	// We wrap in bufio to ensure the decoder gets enough data to identify the format
 	streamer, format, err := mp3.Decode(wrappedReader)
 	if err != nil {
-		log.Fatalf("Failed to decode MP3: %v", err)
+		logger.Fatalf("Failed to decode MP3: %v", err)
 	}
 	defer streamer.Close()
 
-	log.Println("Initializing speaker...")
+	logger.Info("Initializing speaker...")
 	speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
 
 	done := make(chan bool)
@@ -134,6 +87,6 @@ func main() {
 		done <- true
 	})))
 
-	log.Println("Playing! Press Ctrl+C to quit.")
+	logger.Print("Playing! Press Ctrl+C to quit.")
 	<-done
 }
