@@ -1,7 +1,4 @@
-#+TITLE: RPGamers Radio Go Client
+#+TITLE: Go Radio Client
 
-This is a simple Go client that connects to the web based radio hosted by
-[[https://www.rpgamers.net/radio/][RPGamers]].
-
-*Disclaimer*: I am not affiliated with RPGamers, I'm just a fan of their game
- music radio.
+This is a simple Go client that connects to the web based radios and allows you
+to stream the audio.
