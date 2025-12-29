@@ -20,7 +20,6 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
-	// 1. The direct stream URL (Icecast mount point)
 	streamURL := os.Getenv("STREAM_URL")
 	if streamURL == "" {
 		log.Fatal("STREAM_URL not set")
