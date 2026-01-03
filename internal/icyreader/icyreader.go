@@ -48,7 +48,6 @@ func (r *IcyReader) Read(p []byte) (n int, err error) {
 			if _, err := io.ReadFull(r.body, metaData); err != nil {
 				return 0, err
 			}
-			parseMetadata(string(metaData))
 		}
 		r.bytesToNext = r.interval
 	}

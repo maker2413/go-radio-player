@@ -7,11 +7,12 @@ import (
 	"time"
 
 	"github.com/charmbracelet/log"
-	"github.com/gopxl/beep"
+	"github.com/gdamore/tcell/v2"
 	"github.com/gopxl/beep/mp3"
 	"github.com/gopxl/beep/speaker"
 	"github.com/joho/godotenv"
-	"github.com/maker2413/go-radio/internal/icyreader"
+	"github.com/maker2413/go-radio-player/internal/icyreader"
+	"github.com/maker2413/go-radio-player/internal/player"
 )
 
 func main() {
@@ -81,11 +82,52 @@ func main() {
 	logger.Info("Initializing speaker...")
 	speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
 
-	done := make(chan bool)
-	speaker.Play(beep.Seq(streamer, beep.Callback(func() {
-		done <- true
-	})))
+	screen, err := tcell.NewScreen()
+	if err != nil {
+		logger.Fatal(err)
+	}
+	err = screen.Init()
+	if err != nil {
+		logger.Fatal(err)
+	}
+	defer screen.Fini()
 
-	logger.Print("Playing! Press Ctrl+C to quit.")
-	<-done
+	ap, err := player.NewAudioPlayer(format.SampleRate, streamer)
+	if err != nil {
+		logger.Fatal(err)
+	}
+
+	screen.Clear()
+	ap.Draw(screen)
+	screen.Show()
+
+	ap.Play()
+
+	seconds := time.Tick(time.Second)
+	events := make(chan tcell.Event)
+	go func() {
+		for {
+			events <- screen.PollEvent()
+		}
+	}()
+
+loop:
+	for {
+		select {
+		case event := <-events:
+			changed, quit := ap.Handle(event)
+			if quit {
+				break loop
+			}
+			if changed {
+				screen.Clear()
+				ap.Draw(screen)
+				screen.Show()
+			}
+		case <-seconds:
+			screen.Clear()
+			ap.Draw(screen)
+			screen.Show()
+		}
+	}
 }
