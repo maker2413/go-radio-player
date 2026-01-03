@@ -2,7 +2,6 @@ package icyreader
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"strings"
 )
@@ -33,6 +32,7 @@ type IcyReader struct {
 	body        io.ReadCloser
 	interval    int
 	bytesToNext int
+	TitleChan   chan string
 }
 
 func (r *IcyReader) Read(p []byte) (n int, err error) {
@@ -48,6 +48,7 @@ func (r *IcyReader) Read(p []byte) (n int, err error) {
 			if _, err := io.ReadFull(r.body, metaData); err != nil {
 				return 0, err
 			}
+			r.parseMetadata(string(metaData))
 		}
 		r.bytesToNext = r.interval
 	}
@@ -67,11 +68,14 @@ func (r *IcyReader) Close() error {
 	return r.body.Close()
 }
 
-func parseMetadata(meta string) {
+func (r *IcyReader) parseMetadata(meta string) {
 	// Format is usually: StreamTitle='Song Name - Artist';
 	if strings.Contains(meta, "StreamTitle='") {
 		parts := strings.Split(meta, "StreamTitle='")
 		title := strings.Split(parts[1], "';")[0]
-		fmt.Printf("\n--- NOW PLAYING: %s ---\n", title)
+		select {
+		case r.TitleChan <- title:
+		default:
+		}
 	}
 }

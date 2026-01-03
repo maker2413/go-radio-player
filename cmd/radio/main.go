@@ -21,6 +21,11 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
+	stationName := os.Getenv("STATION_NAME")
+	if stationName == "" {
+		stationName = "Unknown"
+	}
+
 	streamURL := os.Getenv("STREAM_URL")
 	if streamURL == "" {
 		log.Fatal("STREAM_URL not set")
@@ -68,6 +73,8 @@ func main() {
 	logger.Debug("Metadata interval: %d bytes", metaint)
 
 	reader := icyreader.NewIcyReader(resp.Body, metaint)
+	titleChan := make(chan string, 10)
+	reader.TitleChan = titleChan
 
 	wrappedReader := icyreader.NewWrappedReader(reader, 32*1024) // 32KB buffer
 
@@ -92,7 +99,7 @@ func main() {
 	}
 	defer screen.Fini()
 
-	ap, err := player.NewAudioPlayer(format.SampleRate, streamer)
+	ap, err := player.NewAudioPlayer(format.SampleRate, streamer, stationName, titleChan)
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -125,9 +132,11 @@ loop:
 				screen.Show()
 			}
 		case <-seconds:
-			screen.Clear()
-			ap.Draw(screen)
-			screen.Show()
+			if ap.CheckForTitleUpdate() {
+				screen.Clear()
+				ap.Draw(screen)
+				screen.Show()
+			}
 		}
 	}
 }
