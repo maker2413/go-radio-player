@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
-	"github.com/gdamore/tcell/v2"
 	"github.com/gopxl/beep/mp3"
 	"github.com/gopxl/beep/speaker"
 	"github.com/joho/godotenv"
@@ -32,45 +32,50 @@ func main() {
 	}
 
 	debug := os.Getenv("DEBUG")
-	if debug == "" {
-		log.Fatal("DEBUG not set")
-	}
-
-	logCaller := false
-	logLevel := 0
 	if debug == "true" {
-		logCaller = true
-		logLevel = -4
+		f, err := tea.LogToFile("debug.log", "debug")
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer func() {
+			err = f.Close()
+			if err != nil {
+				log.Fatal(err)
+			}
+		}()
 	}
 
-	logger := log.NewWithOptions(os.Stderr, log.Options{
-		ReportCaller:    logCaller,
-		ReportTimestamp: true,
-		TimeFormat:      time.RFC3339,
-		Level:           log.Level(logLevel),
-	})
-
-	// 2. Fetch the stream via HTTP
-	logger.Info("Connecting to stream...")
+	log.Info("Connecting to stream...")
 	client := &http.Client{Timeout: 0}
-	req, _ := http.NewRequest("GET", streamURL, nil)
+	req, err := http.NewRequest("GET", streamURL, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
 	req.Header.Set("Icy-MetaData", "1")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.Fatalf("Failed to connect: %v", err)
+		log.Fatalf("Failed to connect: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err = resp.Body.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	// Check if the server actually supports ICY metadata
 	icyIntStr := resp.Header.Get("icy-metaint")
 	if icyIntStr == "" {
-		logger.Fatal("Server did not return icy-metaint. This might not be a direct Icecast stream.")
+		log.Fatal("Server did not return icy-metaint. This might not be a direct Icecast stream.")
 	}
 
 	// Get the interval from headers
-	metaint, _ := strconv.Atoi(resp.Header.Get("icy-metaint"))
-	logger.Debug("Metadata interval: %d bytes", metaint)
+	metaint, err := strconv.Atoi(resp.Header.Get("icy-metaint"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Debug("Metadata interval: %d bytes", metaint)
 
 	reader := icyreader.NewIcyReader(resp.Body, metaint)
 	titleChan := make(chan string, 10)
@@ -78,65 +83,32 @@ func main() {
 
 	wrappedReader := icyreader.NewWrappedReader(reader, 32*1024) // 32KB buffer
 
-	logger.Debug("Decoding MP3 stream...")
+	log.Debug("Decoding MP3 stream...")
 	// We wrap in bufio to ensure the decoder gets enough data to identify the format
 	streamer, format, err := mp3.Decode(wrappedReader)
 	if err != nil {
-		logger.Fatalf("Failed to decode MP3: %v", err)
+		log.Fatalf("Failed to decode MP3: %v", err)
 	}
-	defer streamer.Close()
-
-	logger.Info("Initializing speaker...")
-	speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
-
-	screen, err := tcell.NewScreen()
-	if err != nil {
-		logger.Fatal(err)
-	}
-	err = screen.Init()
-	if err != nil {
-		logger.Fatal(err)
-	}
-	defer screen.Fini()
-
-	ap, err := player.NewAudioPlayer(format.SampleRate, streamer, stationName, titleChan)
-	if err != nil {
-		logger.Fatal(err)
-	}
-
-	screen.Clear()
-	ap.Draw(screen)
-	screen.Show()
-
-	ap.Play()
-
-	seconds := time.Tick(time.Second)
-	events := make(chan tcell.Event)
-	go func() {
-		for {
-			events <- screen.PollEvent()
+	defer func() {
+		err = streamer.Close()
+		if err != nil {
+			log.Fatal(err)
 		}
 	}()
 
-loop:
-	for {
-		select {
-		case event := <-events:
-			changed, quit := ap.Handle(event)
-			if quit {
-				break loop
-			}
-			if changed {
-				screen.Clear()
-				ap.Draw(screen)
-				screen.Show()
-			}
-		case <-seconds:
-			if ap.CheckForTitleUpdate() {
-				screen.Clear()
-				ap.Draw(screen)
-				screen.Show()
-			}
-		}
+	log.Info("Initializing speaker...")
+	err = speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
+	if err != nil {
+		log.Fatal("Failed to initialize speaker:", err)
+	}
+
+	ap, err := player.NewAudioPlayer(format.SampleRate, streamer, stationName, titleChan)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	p := tea.NewProgram(ap, tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		log.Fatal(err)
 	}
 }

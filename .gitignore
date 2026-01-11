@@ -3,3 +3,7 @@
 
 # Binaries
 cmd/radio/rpgamer-radio
+radio
+
+# Log files
+debug.log

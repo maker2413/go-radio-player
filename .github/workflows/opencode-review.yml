@@ -1,0 +1,55 @@
+name: OpenCode PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      issues: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run OpenCode Review
+        uses: anomalyco/opencode/github@latest
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        with:
+          model: opencode/big-pickle
+          prompt: |
+            This project is a high-performance backend using Go with the bubbletea library from charmbracelet.
+            Please ensure concurrency patterns follow best practices for this ecosystem.
+
+            You are an expert Staff Software Engineer and Security Researcher.
+            Your goal is to provide a rigorous, concise, and actionable review of the
+            following code changes.
+
+            Please analyze the provided diff and address the following categories:
+
+            1. **Logical Correctness & Edge Cases**: Identify any flaws in logic,
+               potential race conditions, or unhandled edge cases (e.g., null pointers,
+               empty inputs, or network timeouts).
+            2. **Performance & Scalability**: Point out any O(n^2) operations,
+               unnecessary memory allocations, or inefficient database queries.
+            3. **Security**: Look for vulnerabilities such as injection risks,
+               improper handling of secrets, or weak permission checks.
+            4. **Maintainability**: Suggest improvements for readability and
+               architectural consistency. Does this change introduce technical debt?
+
+            **Review Guidelines**:
+            - Be specific. Refer to line numbers or function names.
+            - Prioritize high-impact issues over minor "nitpicks" (like whitespace).
+            - If the code is excellent, provide a brief summary of why it's well-implemented.
+            - Use a professional, constructive, and encouraging tone.
+
+            Output your review in Markdown format.
+                    prompt: |
+                      Perform a thorough code review.
+                      Focus on architectural logic, potential race conditions, and edge cases.
