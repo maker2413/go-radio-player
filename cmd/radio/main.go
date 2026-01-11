@@ -37,7 +37,12 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer f.Close()
+		defer func() {
+			err = f.Close()
+			if err != nil {
+				log.Fatal(err)
+			}
+		}()
 	}
 
 	log.Info("Connecting to stream...")
@@ -52,7 +57,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err = resp.Body.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	// Check if the server actually supports ICY metadata
 	icyIntStr := resp.Header.Get("icy-metaint")
@@ -79,10 +89,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to decode MP3: %v", err)
 	}
-	defer streamer.Close()
+	defer func() {
+		err = streamer.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	log.Info("Initializing speaker...")
-	speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
+	err = speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
+	if err != nil {
+		log.Fatal("Failed to initialize speaker:", err)
+	}
 
 	ap, err := player.NewAudioPlayer(format.SampleRate, streamer, stationName, titleChan)
 	if err != nil {
