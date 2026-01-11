@@ -1,6 +1,7 @@
 package player
 
 import (
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -14,6 +15,7 @@ type audioPlayer struct {
 	sampleRate   beep.SampleRate
 	streamer     beep.StreamSeeker
 	volume       *effects.Volume
+	volumeMutex  sync.Mutex
 	stationName  string
 	titleChan    <-chan string
 	currentTitle string
@@ -65,15 +67,21 @@ func (ap *audioPlayer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return ap, tea.Quit
 		case "w":
 			speaker.Lock()
+			ap.volumeMutex.Lock()
 			ap.volume.Volume += 0.1
+			ap.volumeMutex.Unlock()
 			speaker.Unlock()
 		case "s":
 			speaker.Lock()
+			ap.volumeMutex.Lock()
 			ap.volume.Volume -= 0.1
+			ap.volumeMutex.Unlock()
 			speaker.Unlock()
 		case "m", " ":
 			speaker.Lock()
+			ap.volumeMutex.Lock()
 			ap.volume.Silent = !ap.volume.Silent
+			ap.volumeMutex.Unlock()
 			speaker.Unlock()
 		}
 	}
