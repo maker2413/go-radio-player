@@ -64,6 +64,7 @@ func (ap *audioPlayer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":
+			speaker.Close()
 			return ap, tea.Quit
 		case "w":
 			speaker.Lock()

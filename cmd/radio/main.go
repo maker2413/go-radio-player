@@ -42,7 +42,10 @@ func main() {
 
 	log.Info("Connecting to stream...")
 	client := &http.Client{Timeout: 0}
-	req, _ := http.NewRequest("GET", streamURL, nil)
+	req, err := http.NewRequest("GET", streamURL, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
 	req.Header.Set("Icy-MetaData", "1")
 
 	resp, err := client.Do(req)
@@ -58,7 +61,10 @@ func main() {
 	}
 
 	// Get the interval from headers
-	metaint, _ := strconv.Atoi(resp.Header.Get("icy-metaint"))
+	metaint, err := strconv.Atoi(resp.Header.Get("icy-metaint"))
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Debug("Metadata interval: %d bytes", metaint)
 
 	reader := icyreader.NewIcyReader(resp.Body, metaint)
