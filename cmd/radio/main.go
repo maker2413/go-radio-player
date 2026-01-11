@@ -10,20 +10,15 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/gopxl/beep/mp3"
 	"github.com/gopxl/beep/speaker"
-	"github.com/joho/godotenv"
+	"github.com/maker2413/go-radio-player/internal/config"
 	"github.com/maker2413/go-radio-player/internal/icyreader"
 	"github.com/maker2413/go-radio-player/internal/player"
 )
 
 func main() {
-	err := godotenv.Load("../../.env")
+	config, err := config.GetConfig()
 	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-
-	stationName := os.Getenv("STATION_NAME")
-	if stationName == "" {
-		stationName = "Unknown"
+		log.Fatal(err)
 	}
 
 	streamURL := os.Getenv("STREAM_URL")
@@ -102,7 +97,7 @@ func main() {
 		log.Fatal("Failed to initialize speaker:", err)
 	}
 
-	ap, err := player.NewAudioPlayer(format.SampleRate, streamer, stationName, titleChan)
+	ap, err := player.NewAudioPlayer(format.SampleRate, streamer, config.StationName, titleChan)
 	if err != nil {
 		log.Fatal(err)
 	}
