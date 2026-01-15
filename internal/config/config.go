@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/knadh/koanf"
@@ -23,17 +24,22 @@ type Config struct {
 func GetConfig() (config Config, err error) {
 	var k = koanf.New(".")
 
-	// 1. Load the structured list from YAML
 	if err = k.Load(file.Provider("config.yaml"), yaml.Parser()); err != nil {
 		return config, err
 	}
 
-	// 2. Load Environment Variables for overrides (e.g. DEBUG=true)
-	k.Load(env.Provider("", ".", func(s string) string {
+	err = k.Load(env.Provider("", ".", func(s string) string {
 		return strings.ReplaceAll(strings.ToLower(s), "__", ".")
 	}), nil)
+	if err != nil {
+		return Config{}, err
+	}
 
 	err = k.Unmarshal("", &config)
+
+	if len(config.Stations) == 0 {
+		return config, errors.New("no stations configured")
+	}
 
 	return config, err
 }

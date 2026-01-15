@@ -20,8 +20,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Println(config)
-
 	if config.Debug {
 		f, err := tea.LogToFile("debug.log", "debug")
 		if err != nil {
