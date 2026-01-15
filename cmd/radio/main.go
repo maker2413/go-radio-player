@@ -20,6 +20,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+	log.Println(config)
+
 	if config.Debug {
 		f, err := tea.LogToFile("debug.log", "debug")
 		if err != nil {
@@ -34,7 +36,7 @@ func main() {
 	}
 
 	client := &http.Client{Timeout: 0}
-	req, err := http.NewRequest("GET", config.StreamURL, nil)
+	req, err := http.NewRequest("GET", config.Stations[0].StreamURL, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -86,7 +88,7 @@ func main() {
 		log.Fatal("Failed to initialize speaker:", err)
 	}
 
-	ap, err := player.NewAudioPlayer(format.SampleRate, streamer, config.StationName, titleChan)
+	ap, err := player.NewAudioPlayer(format.SampleRate, streamer, config.Stations[0].StationName, titleChan)
 	if err != nil {
 		log.Fatal(err)
 	}

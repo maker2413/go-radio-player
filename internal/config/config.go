@@ -1,24 +1,39 @@
 package config
 
-import "github.com/spf13/viper"
+import (
+	"strings"
+
+	"github.com/knadh/koanf"
+	"github.com/knadh/koanf/parsers/yaml"
+	"github.com/knadh/koanf/providers/env"
+	"github.com/knadh/koanf/providers/file"
+)
+
+type Station struct {
+	StationName string `koanf:"name"`
+	StreamURL   string `koanf:"url"`
+}
 
 type Config struct {
-	StationName string `mapstructure:"STATION_NAME"`
-	StreamURL   string `mapstructure:"STREAM_URL"`
+	Stations []Station `koanf:"stations"`
 
-	Debug bool `mapstructure:"DEBUG"`
+	Debug bool `koanf:"debug"`
 }
 
 func GetConfig() (config Config, err error) {
-	viper.SetConfigFile(".env")
-	viper.SetConfigType("env")
-	viper.AutomaticEnv()
+	var k = koanf.New(".")
 
-	err = viper.ReadInConfig()
-	if err != nil {
-		return
+	// 1. Load the structured list from YAML
+	if err = k.Load(file.Provider("config.yaml"), yaml.Parser()); err != nil {
+		return config, err
 	}
 
-	err = viper.Unmarshal(&config)
-	return
+	// 2. Load Environment Variables for overrides (e.g. DEBUG=true)
+	k.Load(env.Provider("", ".", func(s string) string {
+		return strings.ReplaceAll(strings.ToLower(s), "__", ".")
+	}), nil)
+
+	err = k.Unmarshal("", &config)
+
+	return config, err
 }
