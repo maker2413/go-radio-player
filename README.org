@@ -1,4 +1,0 @@
-#+TITLE: Go Radio Client
-
-This is a simple Go client that connects to the web based radios and allows you
-to stream the audio.
