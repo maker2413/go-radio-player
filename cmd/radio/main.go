@@ -1,38 +1,26 @@
 package main
 
 import (
+	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/log"
 	"github.com/gopxl/beep/mp3"
 	"github.com/gopxl/beep/speaker"
-	"github.com/joho/godotenv"
+	"github.com/maker2413/go-radio-player/internal/config"
 	"github.com/maker2413/go-radio-player/internal/icyreader"
 	"github.com/maker2413/go-radio-player/internal/player"
 )
 
 func main() {
-	err := godotenv.Load("../../.env")
+	config, err := config.GetConfig()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Fatal(err)
 	}
 
-	stationName := os.Getenv("STATION_NAME")
-	if stationName == "" {
-		stationName = "Unknown"
-	}
-
-	streamURL := os.Getenv("STREAM_URL")
-	if streamURL == "" {
-		log.Fatal("STREAM_URL not set")
-	}
-
-	debug := os.Getenv("DEBUG")
-	if debug == "true" {
+	if config.Debug {
 		f, err := tea.LogToFile("debug.log", "debug")
 		if err != nil {
 			log.Fatal(err)
@@ -45,9 +33,8 @@ func main() {
 		}()
 	}
 
-	log.Info("Connecting to stream...")
 	client := &http.Client{Timeout: 0}
-	req, err := http.NewRequest("GET", streamURL, nil)
+	req, err := http.NewRequest("GET", config.Stations[0].StreamURL, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -75,7 +62,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Debug("Metadata interval: %d bytes", metaint)
 
 	reader := icyreader.NewIcyReader(resp.Body, metaint)
 	titleChan := make(chan string, 10)
@@ -83,7 +69,6 @@ func main() {
 
 	wrappedReader := icyreader.NewWrappedReader(reader, 32*1024) // 32KB buffer
 
-	log.Debug("Decoding MP3 stream...")
 	// We wrap in bufio to ensure the decoder gets enough data to identify the format
 	streamer, format, err := mp3.Decode(wrappedReader)
 	if err != nil {
@@ -96,13 +81,12 @@ func main() {
 		}
 	}()
 
-	log.Info("Initializing speaker...")
 	err = speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
 	if err != nil {
 		log.Fatal("Failed to initialize speaker:", err)
 	}
 
-	ap, err := player.NewAudioPlayer(format.SampleRate, streamer, stationName, titleChan)
+	ap, err := player.NewAudioPlayer(format.SampleRate, streamer, config.Stations[0].StationName, titleChan)
 	if err != nil {
 		log.Fatal(err)
 	}

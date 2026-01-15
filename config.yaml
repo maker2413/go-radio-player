@@ -1,0 +1,4 @@
+debug: true
+stations:
+  - name: "RPGamers Network"
+    url: "http://listen.rpgamers.net/rpgn"

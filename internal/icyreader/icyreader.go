@@ -54,10 +54,7 @@ func (r *IcyReader) Read(p []byte) (n int, err error) {
 	}
 
 	// Limit read to not cross into the next metadata block
-	limit := len(p)
-	if limit > r.bytesToNext {
-		limit = r.bytesToNext
-	}
+	limit := min(len(p), r.bytesToNext)
 
 	n, err = r.body.Read(p[:limit])
 	r.bytesToNext -= n
