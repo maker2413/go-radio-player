@@ -12,6 +12,7 @@ import (
 )
 
 const (
+	tickRate     = time.Second
 	titlePadding = "        "
 )
 
@@ -22,6 +23,7 @@ type audioPlayer struct {
 	volumeMutex         sync.Mutex
 	stationName         string
 	titleChan           <-chan string
+	titleMutex          sync.Mutex
 	currentTitle        string
 	displayedTitle      string
 	maxDisplayTitleSize int
@@ -63,9 +65,11 @@ func (ap *audioPlayer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		ap.width = msg.Width
 		ap.height = msg.Height
 	case tickMsg:
+		ap.titleMutex.Lock()
 		if len(ap.displayedTitle)-len(titlePadding) > ap.maxDisplayTitleSize {
 			ap.displayedTitle = leftShiftString(ap.displayedTitle)
 		}
+		ap.titleMutex.Unlock()
 
 		if ap.titleUpdate() {
 			return ap, tea.Batch(
@@ -104,9 +108,11 @@ func (ap *audioPlayer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (ap *audioPlayer) View() string {
+	ap.titleMutex.Lock()
 	title := ap.displayedTitle
+	ap.titleMutex.Unlock()
 	if len(title) > ap.maxDisplayTitleSize {
-		title = ap.displayedTitle[:ap.maxDisplayTitleSize]
+		title = title[:ap.maxDisplayTitleSize]
 	}
 
 	output := "Station: " + ap.stationName +
@@ -125,8 +131,10 @@ func (ap *audioPlayer) View() string {
 func (ap *audioPlayer) titleUpdate() bool {
 	select {
 	case title := <-ap.titleChan:
+		ap.titleMutex.Lock()
 		ap.currentTitle = title
 		ap.displayedTitle = ap.currentTitle + titlePadding
+		ap.titleMutex.Unlock()
 		return true
 	default:
 		return false
@@ -146,7 +154,7 @@ func leftShiftString(s string) string {
 }
 
 func tick() tea.Cmd {
-	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+	return tea.Tick(tickRate, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
