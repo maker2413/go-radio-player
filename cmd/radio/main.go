@@ -86,7 +86,7 @@ func main() {
 		log.Fatal("Failed to initialize speaker:", err)
 	}
 
-	ap, err := player.NewAudioPlayer(format.SampleRate, streamer, config.Stations[0].StationName, titleChan)
+	ap, err := player.NewAudioPlayer(format.SampleRate, streamer, config.Stations[0].StationName, titleChan, config.MaxDisplayedTitleSize)
 	if err != nil {
 		log.Fatal(err)
 	}

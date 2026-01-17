@@ -1,4 +1,5 @@
 debug: true
+maxDisplayedTitleSize: 24
 stations:
   - name: "RPGamers Network"
     url: "http://listen.rpgamers.net/rpgn"
