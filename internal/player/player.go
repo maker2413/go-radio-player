@@ -11,16 +11,22 @@ import (
 	"github.com/gopxl/beep/speaker"
 )
 
+const (
+	titlePadding = "        "
+)
+
 type audioPlayer struct {
-	sampleRate   beep.SampleRate
-	streamer     beep.StreamSeeker
-	volume       *effects.Volume
-	volumeMutex  sync.Mutex
-	stationName  string
-	titleChan    <-chan string
-	currentTitle string
-	width        int
-	height       int
+	sampleRate          beep.SampleRate
+	streamer            beep.StreamSeeker
+	volume              *effects.Volume
+	volumeMutex         sync.Mutex
+	stationName         string
+	titleChan           <-chan string
+	currentTitle        string
+	displayedTitle      string
+	maxDisplayTitleSize int
+	width               int
+	height              int
 }
 
 type tickMsg time.Time
@@ -30,15 +36,19 @@ func NewAudioPlayer(
 	streamer beep.StreamSeeker,
 	stationName string,
 	titleChan <-chan string,
+	maxDisplayedTitleSize int,
 ) (*audioPlayer, error) {
 	volume := &effects.Volume{Streamer: streamer, Base: 2, Volume: -2.0}
 
 	return &audioPlayer{sampleRate: sampleRate,
-		streamer:     streamer,
-		volume:       volume,
-		stationName:  stationName,
-		titleChan:    titleChan,
-		currentTitle: ""}, nil
+		streamer:            streamer,
+		volume:              volume,
+		stationName:         stationName,
+		titleChan:           titleChan,
+		currentTitle:        "",
+		displayedTitle:      "",
+		maxDisplayTitleSize: maxDisplayedTitleSize,
+	}, nil
 }
 
 func (ap *audioPlayer) Init() tea.Cmd {
@@ -53,10 +63,14 @@ func (ap *audioPlayer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		ap.width = msg.Width
 		ap.height = msg.Height
 	case tickMsg:
+		if len(ap.displayedTitle)-len(titlePadding) > ap.maxDisplayTitleSize {
+			ap.displayedTitle = leftShiftString(ap.displayedTitle)
+		}
+
 		if ap.titleUpdate() {
 			return ap, tea.Batch(
 				tick(),
-				tea.SetWindowTitle(ap.stationName),
+				tea.SetWindowTitle("♫ "+ap.stationName+" ~ "+ap.currentTitle+" ♫"),
 			)
 		}
 
@@ -90,7 +104,13 @@ func (ap *audioPlayer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (ap *audioPlayer) View() string {
-	output := "Song: " + ap.currentTitle +
+	title := ap.displayedTitle
+	if len(title) > ap.maxDisplayTitleSize {
+		title = ap.displayedTitle[:ap.maxDisplayTitleSize]
+	}
+
+	output := "Station: " + ap.stationName +
+		"\nSong: " + title +
 		"\n\nPress Space or M to mute" +
 		"\nUse W and S to control Volume" +
 		"\nTo exit press escape, or Ctrl+c"
@@ -106,6 +126,7 @@ func (ap *audioPlayer) titleUpdate() bool {
 	select {
 	case title := <-ap.titleChan:
 		ap.currentTitle = title
+		ap.displayedTitle = ap.currentTitle + titlePadding
 		return true
 	default:
 		return false
@@ -114,6 +135,14 @@ func (ap *audioPlayer) titleUpdate() bool {
 
 func (ap *audioPlayer) Play() {
 	speaker.Play(ap.volume)
+}
+
+func leftShiftString(s string) string {
+	if len(s) <= 1 {
+		return s
+	}
+
+	return s[1:] + s[:1]
 }
 
 func tick() tea.Cmd {

@@ -18,7 +18,8 @@ type Station struct {
 type Config struct {
 	Stations []Station `koanf:"stations"`
 
-	Debug bool `koanf:"debug"`
+	MaxDisplayedTitleSize int  `koanf:"maxDisplayedTitleSize"`
+	Debug                 bool `koanf:"debug"`
 }
 
 func GetConfig() (config Config, err error) {
