@@ -157,7 +157,10 @@ func leftShiftString(s string) string {
 		return s
 	}
 
-	return s[1:] + s[:1]
+	b := make([]byte, len(s))
+	copy(b, s[1:])
+	b[len(s)-1] = s[0]
+	return string(b)
 }
 
 func tick() tea.Cmd {
