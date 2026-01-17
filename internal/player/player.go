@@ -42,6 +42,10 @@ func NewAudioPlayer(
 ) (*audioPlayer, error) {
 	volume := &effects.Volume{Streamer: streamer, Base: 2, Volume: -2.0}
 
+	if maxDisplayedTitleSize <= 0 {
+		maxDisplayedTitleSize = len(titlePadding)
+	}
+
 	return &audioPlayer{sampleRate: sampleRate,
 		streamer:            streamer,
 		volume:              volume,
@@ -131,10 +135,13 @@ func (ap *audioPlayer) View() string {
 func (ap *audioPlayer) titleUpdate() bool {
 	select {
 	case title := <-ap.titleChan:
-		ap.titleMutex.Lock()
-		ap.currentTitle = title
-		ap.displayedTitle = ap.currentTitle + titlePadding
-		ap.titleMutex.Unlock()
+		if len(title) > 0 {
+			ap.titleMutex.Lock()
+			ap.currentTitle = title
+			ap.displayedTitle = ap.currentTitle + titlePadding
+			ap.titleMutex.Unlock()
+		}
+
 		return true
 	default:
 		return false
