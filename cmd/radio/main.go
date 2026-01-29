@@ -9,9 +9,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gopxl/beep/mp3"
 	"github.com/gopxl/beep/speaker"
-	"github.com/maker2413/go-radio-player/internal/config"
-	"github.com/maker2413/go-radio-player/internal/icyreader"
-	"github.com/maker2413/go-radio-player/internal/player"
+	"github.com/maker2413/shellpod/internal/config"
+	"github.com/maker2413/shellpod/internal/icyreader"
+	"github.com/maker2413/shellpod/internal/tui"
 )
 
 func main() {
@@ -86,12 +86,12 @@ func main() {
 		log.Fatal("Failed to initialize speaker:", err)
 	}
 
-	ap, err := player.NewAudioPlayer(format.SampleRate, streamer, config.Stations[0].StationName, titleChan, config.MaxDisplayedTitleSize)
+	m, err := tui.NewModel(format.SampleRate, streamer, config.Stations[0].StationName, titleChan, config.MaxDisplayedTitleSize)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	p := tea.NewProgram(ap, tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}

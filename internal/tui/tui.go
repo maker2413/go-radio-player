@@ -1,4 +1,4 @@
-package player
+package tui
 
 import (
 	"sync"
@@ -9,6 +9,7 @@ import (
 	"github.com/gopxl/beep"
 	"github.com/gopxl/beep/effects"
 	"github.com/gopxl/beep/speaker"
+	"github.com/maker2413/shellpod/internal/stack"
 )
 
 const (
@@ -16,7 +17,9 @@ const (
 	titlePadding = "        "
 )
 
-type audioPlayer struct {
+type tickMsg time.Time
+
+type model struct {
 	sampleRate          beep.SampleRate
 	streamer            beep.StreamSeeker
 	volume              *effects.Volume
@@ -27,26 +30,26 @@ type audioPlayer struct {
 	currentTitle        string
 	displayedTitle      string
 	maxDisplayTitleSize int
+	currentPage         string
+	pageHistory         stack.Stack[string]
 	width               int
 	height              int
 }
 
-type tickMsg time.Time
-
-func NewAudioPlayer(
+func NewModel(
 	sampleRate beep.SampleRate,
 	streamer beep.StreamSeeker,
 	stationName string,
 	titleChan <-chan string,
 	maxDisplayedTitleSize int,
-) (*audioPlayer, error) {
+) (tea.Model, error) {
 	volume := &effects.Volume{Streamer: streamer, Base: 2, Volume: -2.0}
 
 	if maxDisplayedTitleSize <= 0 {
 		maxDisplayedTitleSize = len(titlePadding)
 	}
 
-	return &audioPlayer{sampleRate: sampleRate,
+	return &model{sampleRate: sampleRate,
 		streamer:            streamer,
 		volume:              volume,
 		stationName:         stationName,
@@ -54,92 +57,94 @@ func NewAudioPlayer(
 		currentTitle:        "",
 		displayedTitle:      "",
 		maxDisplayTitleSize: maxDisplayedTitleSize,
+		currentPage:         "home",
+		pageHistory:         stack.Stack[string]{},
 	}, nil
 }
 
-func (ap *audioPlayer) Init() tea.Cmd {
-	ap.Play()
+func (m *model) Init() tea.Cmd {
+	m.Play()
 
 	return tick()
 }
 
-func (ap *audioPlayer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		ap.width = msg.Width
-		ap.height = msg.Height
+		m.width = msg.Width
+		m.height = msg.Height
 	case tickMsg:
-		ap.titleMutex.Lock()
-		if len(ap.displayedTitle)-len(titlePadding) > ap.maxDisplayTitleSize {
-			ap.displayedTitle = leftShiftString(ap.displayedTitle)
+		m.titleMutex.Lock()
+		if len(m.displayedTitle)-len(titlePadding) > m.maxDisplayTitleSize {
+			m.displayedTitle = leftShiftString(m.displayedTitle)
 		}
-		ap.titleMutex.Unlock()
+		m.titleMutex.Unlock()
 
-		if ap.titleUpdate() {
-			return ap, tea.Batch(
+		if m.titleUpdate() {
+			return m, tea.Batch(
 				tick(),
-				tea.SetWindowTitle("♫ "+ap.stationName+" ~ "+ap.currentTitle+" ♫"),
+				tea.SetWindowTitle("♫ "+m.stationName+" ~ "+m.currentTitle+" ♫"),
 			)
 		}
 
-		return ap, tick()
+		return m, tick()
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":
 			speaker.Close()
-			return ap, tea.Quit
+			return m, tea.Quit
 		case "w":
 			speaker.Lock()
-			ap.volumeMutex.Lock()
-			ap.volume.Volume += 0.1
-			ap.volumeMutex.Unlock()
+			m.volumeMutex.Lock()
+			m.volume.Volume += 0.1
+			m.volumeMutex.Unlock()
 			speaker.Unlock()
 		case "s":
 			speaker.Lock()
-			ap.volumeMutex.Lock()
-			ap.volume.Volume -= 0.1
-			ap.volumeMutex.Unlock()
+			m.volumeMutex.Lock()
+			m.volume.Volume -= 0.1
+			m.volumeMutex.Unlock()
 			speaker.Unlock()
 		case "m", " ":
 			speaker.Lock()
-			ap.volumeMutex.Lock()
-			ap.volume.Silent = !ap.volume.Silent
-			ap.volumeMutex.Unlock()
+			m.volumeMutex.Lock()
+			m.volume.Silent = !m.volume.Silent
+			m.volumeMutex.Unlock()
 			speaker.Unlock()
 		}
 	}
-	return ap, nil
+	return m, nil
 }
 
-func (ap *audioPlayer) View() string {
-	ap.titleMutex.Lock()
-	title := ap.displayedTitle
-	ap.titleMutex.Unlock()
-	if len(title) > ap.maxDisplayTitleSize {
-		title = title[:ap.maxDisplayTitleSize]
+func (m *model) View() string {
+	m.titleMutex.Lock()
+	title := m.displayedTitle
+	m.titleMutex.Unlock()
+	if len(title) > m.maxDisplayTitleSize {
+		title = title[:m.maxDisplayTitleSize]
 	}
 
-	output := "Station: " + ap.stationName +
+	output := "Station: " + m.stationName +
 		"\nSong: " + title +
 		"\n\nPress Space or M to mute" +
 		"\nUse W and S to control Volume" +
-		"\nTo exit press escape, or Ctrl+c"
+		"\nTo exit press escme, or Ctrl+c"
 
 	style := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#FFFFFF")).Padding(1, 2)
 
 	return lipgloss.Place(
-		ap.width, ap.height, lipgloss.Center, lipgloss.Center, style.Render(output))
+		m.width, m.height, lipgloss.Center, lipgloss.Center, style.Render(output))
 }
 
-func (ap *audioPlayer) titleUpdate() bool {
+func (m *model) titleUpdate() bool {
 	select {
-	case title := <-ap.titleChan:
+	case title := <-m.titleChan:
 		if len(title) > 0 {
-			ap.titleMutex.Lock()
-			ap.currentTitle = title
-			ap.displayedTitle = ap.currentTitle + titlePadding
-			ap.titleMutex.Unlock()
+			m.titleMutex.Lock()
+			m.currentTitle = title
+			m.displayedTitle = m.currentTitle + titlePadding
+			m.titleMutex.Unlock()
 		}
 
 		return true
@@ -148,8 +153,8 @@ func (ap *audioPlayer) titleUpdate() bool {
 	}
 }
 
-func (ap *audioPlayer) Play() {
-	speaker.Play(ap.volume)
+func (m *model) Play() {
+	speaker.Play(m.volume)
 }
 
 func leftShiftString(s string) string {

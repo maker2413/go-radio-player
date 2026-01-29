@@ -6,3 +6,7 @@ radio
 
 # Log files
 debug.log
+
+# Test files
+coverage.out
+coverage.svg
